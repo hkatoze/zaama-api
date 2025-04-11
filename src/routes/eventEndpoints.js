@@ -74,6 +74,15 @@ module.exports = (app) => {
   });
 
   // Reccupérer tous les évènements publiés
+  const days = [
+    "Dimanche",
+    "Lundi",
+    "Mardi",
+    "Mercredi",
+    "Jeudi",
+    "Vendredi",
+    "Samedi",
+  ];
   app.get("/api/events", auth, async (req, res) => {
     const { city, date, q, page = 1, limit = 10 } = req.query;
     const offset = (parseInt(page) - 1) * parseInt(limit);
@@ -81,7 +90,7 @@ module.exports = (app) => {
 
     if (city) where.city = city;
     if (date) where.event_date = { [Op.gte]: new Date(date) };
-    else where.event_date = { [Op.gte]: new Date() }; // Pour n'afficher que les événements à venir
+    else where.event_date = { [Op.gte]: new Date() };
 
     if (q) {
       where[Op.or] = [
@@ -95,24 +104,34 @@ module.exports = (app) => {
         where,
         offset,
         limit: parseInt(limit),
-        order: [["event_date", "ASC"]], // Trie du plus proche à venir au plus loin
+        order: [["event_date", "ASC"]],
+      });
+
+      // Ajout du champ formaté
+      const formattedRows = rows.map((event) => {
+        const dateObj = new Date(event.event_date);
+        const dayName = days[dateObj.getDay()];
+        const dateStr = dateObj.toLocaleDateString("fr-FR");
+        const hourStr = `${String(dateObj.getHours()).padStart(
+          2,
+          "0"
+        )}H${String(dateObj.getMinutes()).padStart(2, "0")}`;
+
+        return {
+          ...event.toJSON(),
+          event_date_formatted: {
+            day: dayName,
+            date: dateStr,
+            hour: hourStr,
+          },
+        };
       });
 
       const totalPages = Math.ceil(count / limit);
 
-      // Formatage de la date avant de renvoyer les résultats
-      const formattedEvents = rows.map((event) => {
-        return {
-          ...event.toJSON(),
-          event_date_formatted: dayjs(event.event_date).format(
-            "dddd D MMMM YYYY [à] HH[H]mm"
-          ),
-        };
-      });
-
       res.json({
         message: "Événements récupérés avec succès.",
-        data: formattedEvents,
+        data: formattedRows,
         pagination: {
           totalItems: count,
           currentPage: parseInt(page),
